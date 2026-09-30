@@ -12,11 +12,11 @@ export default function Home() {
         </div>
         
         <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight">
-          SiAP <span className="text-blue-600">GURU AI</span>
+          STUPA <span className="text-blue-600">GURU AI</span>
         </h1>
         <p className="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
           Sistem Administrasi Pembelajaran Guru berbasis Kecerdasan Buatan. 
-          Buat RPP, Modul Ajar, LKPD, dan Jurnal sesuai Kurikulum Merdeka secara otomatis.
+          Buat RPE, RPPM, Analisis CP, Modul Ajar, LKPD, Asesmen dan Jurnal sesuai Kurikulum Merdeka secara otomatis.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-8">
@@ -33,7 +33,7 @@ export default function Home() {
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
             <FileText className="w-10 h-10 text-blue-500 mb-4 mx-auto" />
             <h3 className="font-bold text-lg mb-2">Ekspor ke PDF</h3>
-            <p className="text-slate-500 text-sm">Dokumen langsung siap cetak dengan format PDF dan desain yang rapi.</p>
+            <p className="text-slate-500 text-sm">Dokumen langsung siap edit & cetak dengan format WORD/PDF dan desain yang rapi.</p>
           </div>
         </div>
 
@@ -46,7 +46,7 @@ export default function Home() {
       </main>
       
       <footer className="mt-20 text-slate-400 text-sm">
-        &copy; {new Date().getFullYear()} Generator Guru AI. Open Source Project.
+        &copy; {new Date().getFullYear()} Generator Guru AI. Cendana Visual.
       </footer>
     </div>
   );
