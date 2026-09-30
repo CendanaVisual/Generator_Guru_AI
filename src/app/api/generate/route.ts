@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Daftar model yang akan dicoba secara berurutan (fallback chain)
+// ── Model fallback chain ────────────────────────────────────────────────────
 const MODEL_CHAIN = [
   "gemini-3.8-flash",
   "gemini-3.5-flash",
@@ -10,219 +10,224 @@ const MODEL_CHAIN = [
   "gemini-flash-lite-latest",
 ];
 
-function generateDemoHTML(docType: string, grade: string, topic: string): string {
-  const now = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-  
-  if (docType === "Modul Ajar" || docType === "RPP") {
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-        <div style="text-align: center; border-bottom: 3px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
-          <h1 style="color: #1e3a8a; margin-bottom: 5px;">${docType.toUpperCase()}</h1>
-          <h2 style="color: #475569; font-weight: normal;">Kurikulum Merdeka</h2>
-        </div>
-        
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">A. Informasi Umum</h2>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9; width: 200px;"><strong>Satuan Pendidikan</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">[Nama Sekolah]</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Fase / Kelas</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${grade}</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Mata Pelajaran</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">[Sesuaikan]</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Topik</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${topic}</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Alokasi Waktu</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">2 x 35 Menit</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Tanggal</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${now}</td></tr>
-        </table>
+// ── HTML output rules injected into every prompt ────────────────────────────
+const HTML_RULES = `
+Aturan output wajib:
+- Output HARUS berupa HTML langsung (TANPA backtick \`\`\`html atau apapun). Langsung mulai dari tag <div>.
+- Gunakan inline CSS yang profesional. Warna utama heading: #1e3a8a. Font: Arial, sans-serif.
+- Semua tabel wajib memiliki border 1px solid #cbd5e1, padding 8px, header background #1e3a8a teks putih.
+- Konten harus lengkap, detail, dan berkualitas tinggi dalam bahasa Indonesia yang baik.
+- Dokumen siap cetak format A4.
+`.trim();
 
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">B. Capaian Pembelajaran</h2>
-        <p>Peserta didik mampu mengidentifikasi, memahami, dan menjelaskan konsep <strong>${topic}</strong> serta mengaitkannya dalam konteks kehidupan sehari-hari sesuai tahapan perkembangan pada ${grade}.</p>
+// ── Per-doctype prompt builder ──────────────────────────────────────────────
+function buildPrompt(p: Record<string, any>): string {
+  const { docType } = p;
 
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">C. Tujuan Pembelajaran</h2>
-        <ol>
-          <li>Peserta didik dapat menjelaskan pengertian ${topic} dengan bahasa sendiri.</li>
-          <li>Peserta didik dapat mengidentifikasi contoh-contoh ${topic} di lingkungan sekitar.</li>
-          <li>Peserta didik dapat mempraktikkan pengetahuan tentang ${topic} dalam aktivitas sederhana.</li>
-        </ol>
+  if (docType === "Rincian Minggu Efektif") {
+    return `Buat dokumen "Rincian Minggu Efektif" Kurikulum Merdeka dengan data:
+Nama Sekolah: ${p.namaSekolah} | Kelas: ${p.kelas} | Mapel: ${p.mapel}
+JP/Minggu: ${p.jpMinggu} | Tahun Pelajaran: ${p.tahunPel || '2024/2025'} | Kota: ${p.tempat || ''}
+Kepsek: ${p.namaKepsek || '-'} (NIP: ${p.nipKepsek || '-'}) | Guru: ${p.namaGuru || '-'} (NIP: ${p.nipGuru || '-'})
+Catatan: ${p.catatan || '-'}
 
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">D. Profil Pelajar Pancasila</h2>
-        <ul>
-          <li><strong>Bernalar Kritis</strong> — Menganalisis dan mengevaluasi informasi terkait ${topic}.</li>
-          <li><strong>Gotong Royong</strong> — Bekerja sama dalam kelompok untuk menyelesaikan tugas.</li>
-          <li><strong>Kreatif</strong> — Menemukan cara-cara baru untuk mengekspresikan pemahaman.</li>
-        </ul>
+Dokumen mencakup:
+1. Header sekolah yang rapi
+2. Tabel rincian per bulan (Sem 1 & 2): No | Bulan | Jumlah Pekan | Tidak Efektif | Efektif | JP Efektif
+3. Rekap total JP efektif per semester
+4. Keterangan hari libur dan kegiatan sekolah
+5. Kolom tanda tangan guru dan kepala sekolah
+${HTML_RULES}`;
+  }
 
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">E. Kegiatan Pembelajaran</h2>
-        <h3>1. Pendahuluan (10 menit)</h3>
-        <ul>
-          <li>Guru menyapa peserta didik dan melakukan presensi.</li>
-          <li>Guru menyampaikan tujuan pembelajaran hari ini.</li>
-          <li>Ice breaking atau apersepsi terkait ${topic}.</li>
-        </ul>
-        <h3>2. Kegiatan Inti (45 menit)</h3>
-        <ul>
-          <li>Guru menyajikan materi tentang ${topic} melalui media visual.</li>
-          <li>Peserta didik berdiskusi dalam kelompok kecil.</li>
-          <li>Peserta didik mempresentasikan hasil diskusi.</li>
-          <li>Guru memberikan penguatan dan klarifikasi.</li>
-        </ul>
-        <h3>3. Penutup (15 menit)</h3>
-        <ul>
-          <li>Guru bersama peserta didik menyimpulkan materi.</li>
-          <li>Refleksi: Apa yang sudah dipelajari hari ini?</li>
-          <li>Guru memberikan tindak lanjut/tugas rumah.</li>
-        </ul>
+  if (docType === "Analisis Capaian Pembelajaran") {
+    const elemenStr = (p.elemen as any[] || [])
+      .map((el: any, i: number) => `  Elemen ${i + 1} — "${el.nama}": ${el.deskripsi}`)
+      .join('\n');
+    return `Buat dokumen "Analisis Capaian Pembelajaran" Kurikulum Merdeka:
+Mapel: ${p.mapel} | Jenjang: ${p.jenjang} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Pekan Efektif: ${p.pekanEfektif} | JP/Pekan: ${p.jpPerPekan} | Total JP: ${p.totalJp}
+BAB Target: ${p.jumlahBab || 'menyesuaikan'} | Konteks: ${p.topik || '-'}
+Format KKTP: ${p.kktp}
+Kepsek: ${p.namaKepsek || '-'} (NIP: ${p.nipKepsek || '-'}) | Guru: ${p.namaGuru || '-'} (NIP: ${p.nipGuru || '-'}) | Kota: ${p.kota || '-'}
 
-        <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">F. Asesmen</h2>
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <tr style="background: #1e3a8a; color: white;"><th style="border: 1px solid #cbd5e1; padding: 8px;">Jenis</th><th style="border: 1px solid #cbd5e1; padding: 8px;">Teknik</th><th style="border: 1px solid #cbd5e1; padding: 8px;">Instrumen</th></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px;">Diagnostik</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Tanya jawab</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Pertanyaan lisan</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px;">Formatif</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Observasi & LKPD</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Lembar observasi</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px;">Sumatif</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Tes tertulis</td><td style="border: 1px solid #cbd5e1; padding: 8px;">Soal uraian</td></tr>
-        </table>
+Elemen CP:
+${elemenStr}
 
-        <div style="background-color: #dbeafe; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #2563eb;">
-          <strong>ℹ️ Mode Template:</strong> Dokumen ini dibuat menggunakan template bawaan karena API Key Gemini belum dikonfigurasi dengan benar. 
-          Silakan masukkan API Key yang valid di <em>Vercel → Settings → Environment Variables</em> untuk mendapatkan konten yang di-generate oleh AI secara dinamis.
-        </div>
-      </div>
-    `;
+Dokumen mencakup:
+1. Header identitas lengkap
+2. Tabel Analisis CP: Elemen | Deskripsi CP | Tujuan Pembelajaran (TP) | Alokasi JP | ${p.kktp?.includes('Rubrik') ? 'Rubrik Asesmen (instrumen detail)' : 'KKTP (4 Rentang: Perlu Bimbingan/Cukup/Baik/Sangat Baik)'}
+${p.protaProsem ? '3. PROTA (Program Tahunan) — tabel per semester menggunakan TP hasil analisis\n4. PROSEM (Program Semester 1 & 2) — tabel per bulan/minggu menggunakan TP\n' : ''}
+5. Kolom tanda tangan
+${HTML_RULES}`;
+  }
+
+  if (docType === "Rencana Pembelajaran Mendalam") {
+    return `Buat "Modul Ajar / Rencana Pembelajaran Mendalam" Kurikulum Merdeka:
+Sekolah: ${p.namaSekolah || '-'} | Mapel: ${p.mapel} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Topik: ${p.topik} | Guru: ${p.namaGuru || '-'} | Catatan: ${p.catatan || '-'}
+
+Struktur wajib:
+A. Informasi Umum (identitas, alokasi waktu 3 pertemuan, sarana prasarana)
+B. Komponen Inti (Profil Pelajar Pancasila, Pemahaman Bermakna, Pertanyaan Pemantik)
+C. Kegiatan Pembelajaran per pertemuan (Pendahuluan 10 mnt, Inti 55 mnt, Penutup 10 mnt) — uraian detail
+D. Asesmen: Diagnostik + Formatif + Sumatif lengkap dengan instrumen
+E. Pengayaan & Remedial
+F. Refleksi Guru & Peserta Didik
+G. Lampiran: LKPD mini dan Rubrik Penilaian
+${HTML_RULES}`;
+  }
+
+  if (docType === "RPP Cinta Kemenag") {
+    return `Buat "RPP Cinta Kemenag" format Kementerian Agama RI:
+Sekolah: ${p.namaSekolah || '-'} | Mapel: ${p.mapel} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Topik: ${p.topik} | Guru: ${p.namaGuru || '-'} | Catatan: ${p.catatan || '-'}
+
+Struktur format Kemenag:
+A. Identitas (Madrasah/Sekolah Islam, Mapel, Kelas, Alokasi Waktu)
+B. KI & KD (jika PAI/BTQ) atau Capaian Pembelajaran
+C. Tujuan Pembelajaran (mengandung nilai-nilai Islami)
+D. Materi Pembelajaran (termasuk dalil Al-Qur'an/Hadis bila relevan)
+E. Metode (Islami, student-centered: diskusi, demonstrasi, ceramah interaktif)
+F. Langkah Pembelajaran: Pendahuluan (salam, doa, apersepsi) — Inti — Penutup (doa, refleksi Islami)
+G. Penilaian: Sikap Spiritual & Sosial | Pengetahuan | Keterampilan
+H. Kolom tanda tangan
+${HTML_RULES}`;
+  }
+
+  if (docType === "Rencana Pembelajaran Mendalam Kokulikuler") {
+    return `Buat "Rencana Pembelajaran Kokulikuler / Modul Projek P5" Kurikulum Merdeka:
+Sekolah: ${p.namaSekolah || '-'} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Tema Projek: ${p.topik} | Guru: ${p.namaGuru || '-'} | Catatan: ${p.catatan || '-'}
+
+Struktur:
+A. Identitas Projek (nama, tema, fase, alokasi waktu total)
+B. Deskripsi Projek & Relevansi
+C. Dimensi, Elemen & Sub-elemen Profil Pelajar Pancasila yang dikembangkan
+D. Alur Projek (4 tahap): 1-Pengenalan | 2-Kontekstualisasi | 3-Aksi | 4-Refleksi & Tindak Lanjut
+   (Setiap tahap: tujuan, aktivitas, durasi)
+E. Tabel Jadwal Kegiatan (minggu per minggu)
+F. Asesmen Projek: Rubrik per dimensi PPP
+G. Sumber & Referensi
+${HTML_RULES}`;
   }
 
   if (docType === "LKPD") {
-    return `
-      <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
-        <div style="text-align: center; border: 3px solid #1e3a8a; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
-          <h1 style="color: #1e3a8a; margin-bottom: 5px;">LEMBAR KERJA PESERTA DIDIK (LKPD)</h1>
-          <p style="color: #475569;">${grade} — Kurikulum Merdeka</p>
-        </div>
-        
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9; width: 150px;"><strong>Nama</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">................................</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Kelas</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">................................</td></tr>
-          <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Tanggal</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">................................</td></tr>
-        </table>
+    return `Buat "LKPD (Lembar Kerja Peserta Didik)" interaktif dan menarik:
+Sekolah: ${p.namaSekolah || '-'} | Mapel: ${p.mapel} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Topik: ${p.topik} | Catatan: ${p.catatan || '-'}
 
-        <h2 style="color: #1e3a8a;">Topik: ${topic}</h2>
-        
-        <h3>🎯 Tujuan</h3>
-        <p>Setelah mengerjakan LKPD ini, peserta didik diharapkan dapat memahami dan menjelaskan konsep ${topic}.</p>
-
-        <h3>📝 Kegiatan 1: Mengamati</h3>
-        <p>Amatilah gambar/objek yang berkaitan dengan <strong>${topic}</strong>, lalu jawab pertanyaan berikut:</p>
-        <ol>
-          <li>Apa yang kamu amati? <br><div style="border-bottom: 1px solid #94a3b8; margin: 10px 0; height: 30px;"></div></li>
-          <li>Sebutkan 3 hal yang kamu ketahui tentang ${topic}! <br><div style="border-bottom: 1px solid #94a3b8; margin: 10px 0; height: 30px;"></div><div style="border-bottom: 1px solid #94a3b8; margin: 10px 0; height: 30px;"></div><div style="border-bottom: 1px solid #94a3b8; margin: 10px 0; height: 30px;"></div></li>
-        </ol>
-
-        <h3>📝 Kegiatan 2: Berdiskusi</h3>
-        <p>Diskusikan bersama kelompokmu dan tuliskan kesimpulannya:</p>
-        <div style="border: 1px solid #94a3b8; border-radius: 8px; padding: 15px; min-height: 80px; margin-bottom: 15px;"></div>
-
-        <h3>⭐ Refleksi</h3>
-        <p>Apa yang paling menarik dari materi ${topic} hari ini?</p>
-        <div style="border: 1px solid #94a3b8; border-radius: 8px; padding: 15px; min-height: 60px;"></div>
-
-        <div style="background-color: #dbeafe; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #2563eb;">
-          <strong>ℹ️ Mode Template:</strong> Dokumen ini dibuat menggunakan template bawaan. Konfigurasi API Key Gemini yang valid untuk konten AI dinamis.
-        </div>
-      </div>
-    `;
+Struktur:
+A. Header LKPD (nama siswa, kelas, tanggal, nama LKPD yang menarik)
+B. Tujuan Pembelajaran
+C. Petunjuk Pengerjaan (jelas, ramah anak)
+D. Kegiatan 1 — Mengamati/Membaca: stimulus + pertanyaan dengan area jawaban bergaris
+E. Kegiatan 2 — Bereksperimen/Berdiskusi: langkah + tabel data/hasil
+F. Kegiatan 3 — Menyimpulkan: isian paragraph/esai singkat
+G. Tantangan Ekstra (opsional, untuk pengayaan)
+H. Refleksi Diri (emoji rating + pertanyaan refleksi)
+Buat desain yang menarik dan ramah untuk anak sekolah dengan penggunaan emoji yang tepat.
+${HTML_RULES}`;
   }
 
-  // Jurnal Harian
+  if (docType === "Asesmen Lengkap") {
+    return `Buat perangkat "Asesmen Lengkap" Kurikulum Merdeka:
+Sekolah: ${p.namaSekolah || '-'} | Mapel: ${p.mapel} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Topik: ${p.topik} | Guru: ${p.namaGuru || '-'} | Catatan: ${p.catatan || '-'}
+
+Harus mencakup semua komponen berikut:
+1. ASESMEN DIAGNOSTIK — 5 pertanyaan awal (pilihan ganda + isian) + kunci
+2. ASESMEN FORMATIF — 5 PG + 3 uraian singkat + rubrik penilaian per soal
+3. ASESMEN SUMATIF — 10 PG (dengan 4 opsi ABCD) + 5 uraian + kunci jawaban + pedoman penskoran
+4. RUBRIK PENILAIAN SIKAP (tabel observasi: dimensi PPP)
+5. RUBRIK PENILAIAN KETERAMPILAN / UNJUK KERJA (tabel per indikator)
+6. LEMBAR REKAP NILAI (tabel siap isi: nama siswa, skor diagnostik, formatif, sumatif, ket)
+${HTML_RULES}`;
+  }
+
+  if (docType === "Jurnal Harian") {
+    return `Buat "Jurnal Harian Guru" Kurikulum Merdeka:
+Sekolah: ${p.namaSekolah || '-'} | Mapel: ${p.mapel} | Kelas: ${p.kelas} | Fase: ${p.fase}
+Topik/Materi Hari Ini: ${p.topik} | Guru: ${p.namaGuru || '-'} | Catatan: ${p.catatan || '-'}
+
+Struktur:
+A. Identitas (hari/tanggal, kelas, mapel, jumlah siswa hadir)
+B. Tujuan Pembelajaran hari ini
+C. Capaian Pembelajaran yang dituju
+D. Deskripsi Kegiatan: Pendahuluan | Inti (detail per fase) | Penutup
+E. Catatan Perkembangan Peserta Didik (tabel: nama, catatan, rekomendasi)
+F. Refleksi Guru: Hal yang berhasil | Tantangan | Tindak Lanjut
+G. Tanda tangan guru
+${HTML_RULES}`;
+  }
+
+  return `Buat dokumen "${docType}" yang lengkap untuk kelas ${p.kelas || ''} tentang "${p.topik || ''}" sesuai Kurikulum Merdeka.\n${HTML_RULES}`;
+}
+
+// ── Fallback template (jika API Key tidak ada/invalid) ──────────────────────
+function generateFallbackHTML(docType: string, payload: Record<string, any>): string {
+  const topic = payload.topik || payload.topic || '(Topik belum diisi)';
+  const grade = payload.kelas || payload.grade || '';
+  const mapel = payload.mapel || '';
+  const namaSekolah = payload.namaSekolah || '[Nama Sekolah]';
+
   return `
     <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
       <div style="text-align: center; border-bottom: 3px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
-        <h1 style="color: #1e3a8a;">JURNAL HARIAN GURU</h1>
-        <p style="color: #475569;">Kurikulum Merdeka</p>
+        <h1 style="color: #1e3a8a; margin-bottom: 5px;">${docType.toUpperCase()}</h1>
+        <p style="color: #64748b; margin: 0;">${namaSekolah} — Kurikulum Merdeka</p>
       </div>
-
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
-        <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9; width: 200px;"><strong>Hari/Tanggal</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${now}</td></tr>
-        <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Kelas</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${grade}</td></tr>
-        <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Materi</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">${topic}</td></tr>
-        <tr><td style="border: 1px solid #cbd5e1; padding: 8px; background: #f1f5f9;"><strong>Jumlah Siswa Hadir</strong></td><td style="border: 1px solid #cbd5e1; padding: 8px;">... dari ... siswa</td></tr>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+        ${mapel ? `<tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f1f5f9;width:200px"><strong>Mata Pelajaran</strong></td><td style="border:1px solid #cbd5e1;padding:8px">${mapel}</td></tr>` : ''}
+        ${grade ? `<tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f1f5f9"><strong>Kelas</strong></td><td style="border:1px solid #cbd5e1;padding:8px">${grade}</td></tr>` : ''}
+        <tr><td style="border:1px solid #cbd5e1;padding:8px;background:#f1f5f9"><strong>Topik</strong></td><td style="border:1px solid #cbd5e1;padding:8px">${topic}</td></tr>
       </table>
-
-      <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">Deskripsi Kegiatan</h2>
-      <p>Pembelajaran dimulai dengan apersepsi terkait <strong>${topic}</strong>. Peserta didik antusias mengikuti kegiatan diskusi dan presentasi kelompok. Materi disampaikan menggunakan media visual dan diselingi tanya jawab.</p>
-
-      <h2 style="color: #1e3a8a; border-left: 4px solid #1e3a8a; padding-left: 10px;">Refleksi Guru</h2>
-      <ul>
-        <li><strong>Hal yang berhasil:</strong> Peserta didik aktif berpartisipasi dalam diskusi kelompok.</li>
-        <li><strong>Tantangan:</strong> Beberapa peserta didik masih perlu bimbingan lebih lanjut.</li>
-        <li><strong>Tindak Lanjut:</strong> Memberikan tugas tambahan dan pendampingan individual.</li>
-      </ul>
-
-      <div style="background-color: #dbeafe; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #2563eb;">
-        <strong>ℹ️ Mode Template:</strong> Dokumen ini dibuat menggunakan template bawaan. Konfigurasi API Key Gemini yang valid untuk konten AI dinamis.
+      <div style="background:#fef9c3;border:1px solid #fcd34d;border-radius:8px;padding:16px;margin-top:24px">
+        <strong>⚠️ Mode Template:</strong> Dokumen ini dihasilkan dari template karena API Key Gemini belum dikonfigurasi atau tidak valid.<br>
+        Masukkan <code>GEMINI_API_KEY</code> yang valid di <em>Vercel → Settings → Environment Variables</em> lalu <em>Redeploy</em> untuk mendapatkan konten AI yang dinamis dan penuh.
       </div>
     </div>
   `;
 }
 
+// ── Main handler ────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
-    const { topic, grade, docType } = await req.json();
+    const payload = await req.json();
+    const { docType } = payload;
 
-    if (!topic || !grade || !docType) {
-      return NextResponse.json({ error: 'Parameter belum lengkap. Pastikan semua field terisi.' }, { status: 400 });
+    if (!docType) {
+      return NextResponse.json({ error: 'Jenis dokumen belum dipilih.' }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // Jika tidak ada API Key, langsung gunakan template
     if (!apiKey || apiKey.trim() === '') {
-      return NextResponse.json({ content: generateDemoHTML(docType, grade, topic) });
+      return NextResponse.json({ content: generateFallbackHTML(docType, payload) });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    const userPrompt = buildPrompt(payload);
+    const systemInstruction = `Anda adalah asisten ahli pendidikan Indonesia. Output selalu dalam HTML langsung tanpa backtick atau markdown. Font wajib Arial/sans-serif.`;
 
-    const systemPrompt = `
-Anda adalah asisten ahli pendidikan di Indonesia yang sangat menguasai Kurikulum Merdeka.
-Tugas Anda adalah membuat ${docType} untuk murid pada ${grade}.
-Topik pembelajaran adalah: ${topic}.
-
-Aturan output:
-- Harus sesuai struktur Kurikulum Merdeka (Informasi Umum, Komponen Inti, Capaian Pembelajaran, Profil Pelajar Pancasila, dll).
-- Hasil HARUS berupa format HTML langsung (TANPA markdown code fences \`\`\`html). Langsung mulai dari tag <div>.
-- Gunakan tag semantik HTML (<h1>, <h2>, <ul>, <ol>, <p>, <table> jika perlu) dengan inline styling minimalis dan profesional agar bagus saat di-convert ke PDF.
-- Pastikan font-family: Arial, sans-serif.
-- Buat konten yang detail, lengkap, dan berkualitas tinggi.
-- Gunakan bahasa Indonesia yang baik dan benar.
-    `.trim();
-
-    // Coba setiap model secara berurutan sampai ada yang berhasil
     let lastError = '';
     for (const modelName of MODEL_CHAIN) {
       try {
-        const model = genAI.getGenerativeModel({
-          model: modelName,
-          systemInstruction: systemPrompt
-        });
-
-        const result = await model.generateContent(
-          `Tolong buatkan dokumen ${docType} yang lengkap dan detail tentang materi "${topic}" untuk ${grade} sesuai Kurikulum Merdeka.`
-        );
-        
+        const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+        const result = await model.generateContent(userPrompt);
         let aiContent = result.response.text();
-        // Bersihkan markdown code fences jika ada
         aiContent = aiContent.replace(/```html\s*/gi, '').replace(/```\s*/gi, '');
-
         return NextResponse.json({ content: aiContent });
       } catch (modelError: any) {
         lastError = modelError.message || 'Unknown error';
         console.warn(`Model ${modelName} gagal: ${lastError}`);
-        continue; // Coba model berikutnya
+        continue;
       }
     }
 
-    // Jika SEMUA model gagal, cek apakah karena API Key invalid
-    if (lastError.includes('API key not valid') || lastError.includes('API_KEY_INVALID')) {
-      console.error('API Key tidak valid, menggunakan template fallback.');
-      return NextResponse.json({ content: generateDemoHTML(docType, grade, topic) });
-    }
-
-    // Fallback terakhir: gunakan template
-    console.error('Semua model gagal, menggunakan template fallback. Last error:', lastError);
-    return NextResponse.json({ content: generateDemoHTML(docType, grade, topic) });
+    // Semua model gagal — fallback ke template
+    console.error('Semua model gagal. Last error:', lastError);
+    return NextResponse.json({ content: generateFallbackHTML(docType, payload) });
 
   } catch (error: any) {
     console.error('API Error:', error);
