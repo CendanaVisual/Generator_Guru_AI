@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, FileDown, ArrowLeft, Send } from "lucide-react";
+import { Loader2, FileDown, ArrowLeft, Send, FileText } from "lucide-react";
 import Link from "next/link";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
 
 export default function Dashboard() {
   const [topic, setTopic] = useState("");
@@ -40,11 +38,14 @@ export default function Dashboard() {
     }
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     const element = document.getElementById("document-content");
     if (!element) return;
     
-    const opt = {
+    // Dynamically import html2pdf to prevent Next.js SSR window errors
+    const html2pdf = (await import("html2pdf.js" as any)).default;
+    
+    const opt: any = {
       margin:       10,
       filename:     `${docType.replace(" ", "_")}_${topic}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },

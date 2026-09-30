@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { marked } from 'marked'; // We need marked to convert markdown to HTML for PDF generation. Wait, let's just ask AI to output HTML!
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'dummy',
