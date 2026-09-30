@@ -25,9 +25,9 @@ export async function POST(req: Request) {
       - Pastikan font-family Arial/sans-serif.
     `;
 
-    // Menggunakan model Gemini 1.5 Flash yang cepat dan pintar
+    // Menggunakan model Gemini 3.5 Flash yang paling stabil
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-3.5-flash",
       systemInstruction: systemPrompt
     });
 
