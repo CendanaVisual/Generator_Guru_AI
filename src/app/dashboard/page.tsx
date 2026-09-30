@@ -1,21 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, FileDown, ArrowLeft, Send, FileText } from "lucide-react";
+import { Loader2, FileDown, ArrowLeft, Send, FileText, AlertCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 
 export default function Dashboard() {
   const [topic, setTopic] = useState("");
-  const [grade, setGrade] = useState("Fase A (Kelas 1-2)");
+  const [grade, setGrade] = useState("Fase A (Kelas 1-2 SD)");
   const [docType, setDocType] = useState("Modul Ajar");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic) return;
     setLoading(true);
     setResult(null);
+    setErrorMsg(null);
 
     try {
       const response = await fetch("/api/generate", {
@@ -28,11 +30,11 @@ export default function Dashboard() {
       if (response.ok) {
         setResult(data.content);
       } else {
-        alert("Gagal memuat dari AI: " + data.error);
+        setErrorMsg(data.error || "Terjadi kesalahan yang tidak diketahui.");
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi kesalahan koneksi.");
+      setErrorMsg("Gagal menghubungi server. Periksa koneksi internet Anda.");
     } finally {
       setLoading(false);
     }
@@ -42,12 +44,11 @@ export default function Dashboard() {
     const element = document.getElementById("document-content");
     if (!element) return;
     
-    // Dynamically import html2pdf to prevent Next.js SSR window errors
     const html2pdf = (await import("html2pdf.js" as any)).default;
     
     const opt: any = {
       margin:       10,
-      filename:     `${docType.replace(" ", "_")}_${topic}.pdf`,
+      filename:     `${docType.replace(/ /g, "_")}_${topic.substring(0, 30).replace(/ /g, "_")}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -132,6 +133,23 @@ export default function Dashboard() {
               {loading ? "AI Sedang Berpikir..." : "Generate Dokumen"}
             </button>
           </form>
+
+          {/* Error Message */}
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-red-700 font-medium">Gagal Generate</p>
+                <p className="text-xs text-red-600 mt-1">{errorMsg}</p>
+                <button 
+                  onClick={(e) => { setErrorMsg(null); handleGenerate(e as any); }}
+                  className="mt-2 text-xs text-red-700 font-semibold flex items-center gap-1 hover:underline"
+                >
+                  <RefreshCw className="w-3 h-3" /> Coba Lagi
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* PREVIEW SIDE */}
